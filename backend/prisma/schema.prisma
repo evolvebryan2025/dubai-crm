@@ -1,0 +1,349 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String    @id @default(uuid())
+  name            String
+  email           String    @unique
+  password        String
+  phone           String?
+  phoneSecondary  String?   @map("phone_secondary")
+  nationality     String?
+  gender          String?
+  birthdate       DateTime?
+  roleId          String?   @map("role_id")
+  teamId          String?   @map("team_id")
+  isActive        Boolean   @default(true) @map("is_active")
+  profileImage    String?   @map("profile_image")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  role            Role?     @relation(fields: [roleId], references: [id])
+  team            Team?     @relation("TeamMembers", fields: [teamId], references: [id])
+  ledTeams        Team[]    @relation("TeamLeader")
+  leads           Lead[]
+  sellListings    SellListing[]
+  rentListings    RentListing[]
+  projects        Project[]
+  transactions    Transaction[]
+  owners          Owner[]
+
+  @@map("users")
+}
+
+model Team {
+  id        String   @id @default(uuid())
+  name      String
+  leaderId  String?  @map("leader_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  leader    User?    @relation("TeamLeader", fields: [leaderId], references: [id])
+  members   User[]   @relation("TeamMembers")
+
+  @@map("teams")
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  title       String
+  permissions Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  users       User[]
+
+  @@map("roles")
+}
+
+model Area {
+  id            String   @id @default(uuid())
+  name          String
+  city          String   @default("Dubai")
+  propertyTypes String[] @map("property_types")
+  imageUrl      String?  @map("image_url")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  projects      Project[]
+  sellListings  SellListing[]
+  rentListings  RentListing[]
+
+  @@map("areas")
+}
+
+model Developer {
+  id            String   @id @default(uuid())
+  name          String
+  logoUrl       String?  @map("logo_url")
+  propertyTypes String[] @map("property_types")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  projects      Project[]
+  transactions  Transaction[]
+
+  @@map("developers")
+}
+
+model Project {
+  id               String    @id @default(uuid())
+  name             String
+  areaId           String?   @map("area_id")
+  developerId      String?   @map("developer_id")
+  locationLat      Float?    @map("location_lat")
+  locationLng      Float?    @map("location_lng")
+  address          String?
+  propertyType     String    @map("property_type")
+  completionStatus String    @map("completion_status")
+  listingId        String    @map("listing_id")
+  bedrooms         Int?
+  bathrooms        Int?
+  parking          Int?
+  furniture        String?
+  publicUnitNo     String?   @map("public_unit_no")
+  privateUnitNo    String?   @map("private_unit_no")
+  occupancy        String?
+  availabilityDate DateTime? @map("availability_date")
+  sourceOfListing  String?   @map("source_of_listing")
+  price            Float?
+  serviceCharge    Float?    @map("service_charge")
+  acCharge         Float?    @map("ac_charge")
+  titleEn          String?   @map("title_en")
+  titleAr          String?   @map("title_ar")
+  titleCn          String?   @map("title_cn")
+  descriptionEn    String?   @map("description_en")
+  descriptionAr    String?   @map("description_ar")
+  descriptionCn    String?   @map("description_cn")
+  amenities        String[]  @default([])
+  mediaUrls        String[]  @default([]) @map("media_urls")
+  documentUrls     String[]  @default([]) @map("document_urls")
+  floorPlanUrls    String[]  @default([]) @map("floor_plan_urls")
+  paymentPlan      Json?     @map("payment_plan")
+  portals          Json?
+  status           String    @default("Active")
+  agentId          String?   @map("agent_id")
+  tags             String[]  @default([])
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  area             Area?      @relation(fields: [areaId], references: [id])
+  developer        Developer? @relation(fields: [developerId], references: [id])
+  agent            User?      @relation(fields: [agentId], references: [id])
+
+  @@map("projects")
+}
+
+model SellListing {
+  id               String    @id @default(uuid())
+  propertyType     String    @map("property_type")
+  completionStatus String    @map("completion_status")
+  listingId        String    @map("listing_id")
+  areaId           String?   @map("area_id")
+  community        String?
+  building         String?
+  floor            String?
+  unitNo           String?   @map("unit_no")
+  locationLat      Float?    @map("location_lat")
+  locationLng      Float?    @map("location_lng")
+  address          String?
+  occupancy        String?
+  availabilityDate DateTime? @map("availability_date")
+  bedrooms         Int?
+  bathrooms        Int?
+  parking          Int?
+  furniture        String?
+  publicUnitNo     String?   @map("public_unit_no")
+  privateUnitNo    String?   @map("private_unit_no")
+  sourceOfListing  String?   @map("source_of_listing")
+  price            Float
+  serviceCharge    Float?    @map("service_charge")
+  mortgage         String?
+  acCharge         Float?    @map("ac_charge")
+  titleEn          String?   @map("title_en")
+  titleAr          String?   @map("title_ar")
+  titleCn          String?   @map("title_cn")
+  descriptionEn    String?   @map("description_en")
+  descriptionAr    String?   @map("description_ar")
+  descriptionCn    String?   @map("description_cn")
+  amenities        String[]  @default([])
+  mediaUrls        String[]  @default([]) @map("media_urls")
+  documentUrls     String[]  @default([]) @map("document_urls")
+  portals          Json?
+  status           String    @default("Active")
+  agentId          String?   @map("agent_id")
+  ownerId          String?   @map("owner_id")
+  tags             String[]  @default([])
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  area             Area?     @relation(fields: [areaId], references: [id])
+  agent            User?     @relation(fields: [agentId], references: [id])
+
+  @@map("sell_listings")
+}
+
+model RentListing {
+  id               String    @id @default(uuid())
+  propertyType     String    @map("property_type")
+  completionStatus String    @map("completion_status")
+  listingId        String    @map("listing_id")
+  areaId           String?   @map("area_id")
+  community        String?
+  building         String?
+  floor            String?
+  unitNo           String?   @map("unit_no")
+  locationLat      Float?    @map("location_lat")
+  locationLng      Float?    @map("location_lng")
+  address          String?
+  occupancy        String?
+  availabilityDate DateTime? @map("availability_date")
+  bedrooms         Int?
+  bathrooms        Int?
+  parking          Int?
+  furniture        String?
+  publicUnitNo     String?   @map("public_unit_no")
+  privateUnitNo    String?   @map("private_unit_no")
+  sourceOfListing  String?   @map("source_of_listing")
+  rentalPrice      Float     @map("rental_price")
+  rentalFrequency  String    @map("rental_frequency")
+  cheques          Int?
+  serviceCharge    Float?    @map("service_charge")
+  titleEn          String?   @map("title_en")
+  titleAr          String?   @map("title_ar")
+  titleCn          String?   @map("title_cn")
+  descriptionEn    String?   @map("description_en")
+  descriptionAr    String?   @map("description_ar")
+  descriptionCn    String?   @map("description_cn")
+  amenities        String[]  @default([])
+  mediaUrls        String[]  @default([]) @map("media_urls")
+  documentUrls     String[]  @default([]) @map("document_urls")
+  portals          Json?
+  status           String    @default("Active")
+  agentId          String?   @map("agent_id")
+  ownerId          String?   @map("owner_id")
+  tags             String[]  @default([])
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  area             Area?     @relation(fields: [areaId], references: [id])
+  agent            User?     @relation(fields: [agentId], references: [id])
+
+  @@map("rent_listings")
+}
+
+model Owner {
+  id              String   @id @default(uuid())
+  name            String
+  email           String?
+  phone           String
+  phoneSecondary  String?  @map("phone_secondary")
+  countryCode     String   @default("+971") @map("country_code")
+  sourceOfOwner   String?  @map("source_of_owner")
+  nationality     String?
+  gender          String?
+  birthdate       DateTime?
+  spokenLanguages String[] @default([]) @map("spoken_languages")
+  agentId         String?  @map("agent_id")
+  status          String   @default("Active")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  agent           User?    @relation(fields: [agentId], references: [id])
+
+  @@map("owners")
+}
+
+model Lead {
+  id                    String    @id @default(uuid())
+  leadType              String    @map("lead_type")
+  name                  String
+  phone                 String?
+  email                 String?
+  agentId               String?   @map("agent_id")
+  preferredLocation     String[]  @default([]) @map("preferred_location")
+  budget                Float?
+  preferredRooms        String?   @map("preferred_rooms")
+  preferredSize         String?   @map("preferred_size")
+  preferredPropertyType String?   @map("preferred_property_type")
+  projectType           String?   @map("project_type")
+  buyerType             String?   @map("buyer_type")
+  paymentMethod         String?   @map("payment_method")
+  nationality           String?
+  formName              String?   @map("form_name")
+  sourceOfLead          String?   @map("source_of_lead")
+  status                String    @default("Active")
+  tags                  String[]  @default([])
+  keywords              String?
+  documents             String[]  @default([])
+  lastFollowUpAt        DateTime? @map("last_follow_up_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+
+  agent                 User?     @relation(fields: [agentId], references: [id])
+  transactions          Transaction[]
+
+  @@map("leads")
+}
+
+model Transaction {
+  id                        String   @id @default(uuid())
+  purpose                   String
+  dealDate                  DateTime @map("deal_date")
+  agentId                   String?  @map("agent_id")
+  leadId                    String?  @map("lead_id")
+  developerId               String?  @map("developer_id")
+  propertyType              String?  @map("property_type")
+  unitNumber                String?  @map("unit_number")
+  picture                   String?
+  projectName               String?  @map("project_name")
+  propertyAddress           String?  @map("property_address")
+  dealPrice                 Float    @map("deal_price")
+  bedrooms                  Int?
+  commissionTotalPercentage Float?   @map("commission_total_percentage")
+  commissionTotalAmount     Float?   @map("commission_total_amount")
+  vat                       Float?
+  commissionAgents          Json?    @map("commission_agents")
+  commissionStatus          Json?    @map("commission_status")
+  approvalStatus            String   @default("Pending") @map("approval_status")
+  documents                 String[] @default([])
+  createdAt                 DateTime @default(now()) @map("created_at")
+
+  agent                     User?      @relation(fields: [agentId], references: [id])
+  lead                      Lead?      @relation(fields: [leadId], references: [id])
+  developer                 Developer? @relation(fields: [developerId], references: [id])
+
+  @@map("transactions")
+}
+
+model Workflow {
+  id    String @id @default(uuid())
+  name  String
+  steps Json   @default("[]")
+
+  @@map("workflows")
+}
+
+model CompanyProfile {
+  id                    String   @id @default(uuid())
+  companyName           String   @map("company_name")
+  pfToken               String?  @map("pf_token")
+  pfSecretToken         String?  @map("pf_secret_token")
+  bayutToken            String?  @map("bayut_token")
+  bayutWhatsappApiKey   String?  @map("bayut_whatsapp_api_key")
+  dubizzleWhatsappApiKey String? @map("dubizzle_whatsapp_api_key")
+  tradeLicenseNumber    String?  @map("trade_license_number")
+  brokerOrn             String?  @map("broker_orn")
+  assignedUsers         String[] @default([]) @map("assigned_users")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  @@map("company_profiles")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("notifications")
+}
