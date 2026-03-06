@@ -7,9 +7,9 @@ import {
   Select,
   Button,
   Space,
-  Tag,
   Typography,
   Spin,
+  Pagination,
   message,
 } from 'antd';
 import {
@@ -17,18 +17,9 @@ import {
   EnvironmentOutlined,
   ReloadOutlined,
 } from '@ant-design/icons';
-import { listingsService } from '../../services/supabaseService';
-
-interface AreaData {
-  id: string;
-  name: string;
-  city: string;
-  property_types: string[];
-  image_url?: string;
-  new_projects_count: number;
-  sell_count: number;
-  rent_count: number;
-}
+import { useNavigate } from 'react-router-dom';
+import { areasService } from '../../services/supabaseService';
+import type { Area } from '../../types/database';
 
 const { Text } = Typography;
 
@@ -38,58 +29,28 @@ const CITY_OPTIONS = [
   { label: 'Sharjah', value: 'Sharjah' },
 ];
 
-const PROPERTY_TYPE_OPTIONS = [
-  { label: 'Apartment', value: 'Apartment' },
-  { label: 'Villa', value: 'Villa' },
-  { label: 'Penthouse', value: 'Penthouse' },
-  { label: 'Townhouse', value: 'Townhouse' },
-  { label: 'Office', value: 'Office' },
-];
-
 interface AreaFilters {
   name: string;
   city: string | undefined;
-  propertyType: string | undefined;
 }
 
 const AreasList: React.FC = () => {
+  const navigate = useNavigate();
   const [filters, setFilters] = useState<AreaFilters>({
     name: '',
     city: undefined,
-    propertyType: undefined,
   });
-  const [areas, setAreas] = useState<AreaData[]>([]);
+  const [areas, setAreas] = useState<Area[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 24;
 
   useEffect(() => {
     const fetchAreas = async () => {
       try {
-        const { data, error } = await listingsService.getAll();
+        const { data, error } = await areasService.getAll();
         if (error) throw error;
-
-        // Derive unique areas from listings and count sell/rent per area
-        const areaMap = new Map<string, { sell: number; rent: number; types: Set<string> }>();
-        for (const listing of data || []) {
-          const areaName = listing.area;
-          if (!areaName) continue;
-          const existing = areaMap.get(areaName) || { sell: 0, rent: 0, types: new Set<string>() };
-          if (listing.type === 'sale') existing.sell++;
-          if (listing.type === 'rent') existing.rent++;
-          if (listing.property_type) existing.types.add(listing.property_type);
-          areaMap.set(areaName, existing);
-        }
-
-        const derivedAreas: AreaData[] = Array.from(areaMap.entries()).map(([name, counts], idx) => ({
-          id: String(idx + 1),
-          name,
-          city: 'Dubai',
-          property_types: Array.from(counts.types),
-          new_projects_count: 0,
-          sell_count: counts.sell,
-          rent_count: counts.rent,
-        }));
-
-        setAreas(derivedAreas);
+        setAreas(data || []);
       } catch {
         message.error('Failed to load areas');
       } finally {
@@ -99,21 +60,43 @@ const AreasList: React.FC = () => {
     fetchAreas();
   }, []);
 
-  const filteredAreas: AreaData[] = useMemo(() => {
-    return areas.filter((area) => {
+  // Deduplicate areas by name, keeping the one with an image
+  const uniqueAreas = useMemo(() => {
+    const map = new Map<string, Area>();
+    for (const area of areas) {
+      const key = area.name.toLowerCase();
+      const existing = map.get(key);
+      if (!existing || (!existing.image_url && area.image_url)) {
+        map.set(key, area);
+      }
+    }
+    return Array.from(map.values());
+  }, [areas]);
+
+  const filteredAreas = useMemo(() => {
+    const filtered = uniqueAreas.filter((area) => {
       const matchesName =
         !filters.name ||
         area.name.toLowerCase().includes(filters.name.toLowerCase());
       const matchesCity = !filters.city || area.city === filters.city;
-      const matchesType =
-        !filters.propertyType ||
-        area.property_types.includes(filters.propertyType);
-      return matchesName && matchesCity && matchesType;
+      return matchesName && matchesCity;
     });
-  }, [filters, areas]);
+    // Show areas with images first, then alphabetically
+    return filtered.sort((a, b) => {
+      if (a.image_url && !b.image_url) return -1;
+      if (!a.image_url && b.image_url) return 1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [filters, uniqueAreas]);
+
+  const paginatedAreas = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredAreas.slice(start, start + pageSize);
+  }, [filteredAreas, currentPage]);
 
   const handleReset = () => {
-    setFilters({ name: '', city: undefined, propertyType: undefined });
+    setFilters({ name: '', city: undefined });
+    setCurrentPage(1);
   };
 
   if (loading) {
@@ -138,9 +121,10 @@ const AreasList: React.FC = () => {
               placeholder="Search by name"
               prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
               value={filters.name}
-              onChange={(e) =>
-                setFilters((prev) => ({ ...prev, name: e.target.value }))
-              }
+              onChange={(e) => {
+                setFilters((prev) => ({ ...prev, name: e.target.value }));
+                setCurrentPage(1);
+              }}
               allowClear
             />
           </Col>
@@ -149,22 +133,11 @@ const AreasList: React.FC = () => {
               placeholder="City"
               allowClear
               value={filters.city}
-              onChange={(value) =>
-                setFilters((prev) => ({ ...prev, city: value }))
-              }
+              onChange={(value) => {
+                setFilters((prev) => ({ ...prev, city: value }));
+                setCurrentPage(1);
+              }}
               options={CITY_OPTIONS}
-              style={{ width: '100%' }}
-            />
-          </Col>
-          <Col xs={24} sm={8} md={5}>
-            <Select
-              placeholder="Property Type"
-              allowClear
-              value={filters.propertyType}
-              onChange={(value) =>
-                setFilters((prev) => ({ ...prev, propertyType: value }))
-              }
-              options={PROPERTY_TYPE_OPTIONS}
               style={{ width: '100%' }}
             />
           </Col>
@@ -178,11 +151,12 @@ const AreasList: React.FC = () => {
 
       {/* Areas Grid */}
       <Row gutter={[16, 16]}>
-        {filteredAreas.map((area) => (
+        {paginatedAreas.map((area) => (
           <Col xs={24} sm={12} md={12} lg={6} key={area.id}>
             <Card
               hoverable
-              style={{ borderRadius: 12, overflow: 'hidden' }}
+              onClick={() => navigate(`/areas/${area.id}`)}
+              style={{ borderRadius: 12, overflow: 'hidden', cursor: 'pointer' }}
               styles={{ body: { padding: 0 } }}
             >
               {/* Area Image */}
@@ -253,22 +227,6 @@ const AreasList: React.FC = () => {
                   {area.city}
                 </Text>
 
-                {/* Property Type Tags */}
-                <div style={{ marginBottom: 10 }}>
-                  {area.property_types.map((type) => (
-                    <Tag
-                      key={type}
-                      style={{
-                        borderRadius: 4,
-                        fontSize: 11,
-                        marginBottom: 4,
-                      }}
-                    >
-                      {type}
-                    </Tag>
-                  ))}
-                </div>
-
                 {/* Stats Row */}
                 <div
                   style={{
@@ -285,7 +243,7 @@ const AreasList: React.FC = () => {
                       strong
                       style={{ fontSize: 13, color: '#1890ff' }}
                     >
-                      {area.new_projects_count}
+                      {area.new_count}
                     </Text>
                   </Space>
                   <Text type="secondary" style={{ fontSize: 12 }}>|</Text>
@@ -314,6 +272,23 @@ const AreasList: React.FC = () => {
           </Col>
         ))}
       </Row>
+
+      {/* Pagination */}
+      {filteredAreas.length > pageSize && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 24 }}>
+          <Pagination
+            current={currentPage}
+            total={filteredAreas.length}
+            pageSize={pageSize}
+            onChange={(page) => {
+              setCurrentPage(page);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            showSizeChanger={false}
+            showTotal={(total) => `${total} areas`}
+          />
+        </div>
+      )}
 
       {/* Empty State */}
       {filteredAreas.length === 0 && (

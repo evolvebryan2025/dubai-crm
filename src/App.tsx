@@ -6,6 +6,8 @@ import { useAuthStore } from './stores/useAuthStore';
 
 const Login = lazy(() => import('./pages/Auth/Login'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
+const AreasList = lazy(() => import('./pages/Areas/AreasList'));
+const AreaDetail = lazy(() => import('./pages/Areas/AreaDetail'));
 const ProjectList = lazy(() => import('./pages/NewProjects/ProjectList'));
 const AddProject = lazy(() => import('./pages/NewProjects/AddProject'));
 const SellList = lazy(() => import('./pages/SellListings/SellList'));
@@ -88,6 +90,8 @@ const App: React.FC = () => {
             <Route path="/login" element={<Login />} />
             <Route element={<AuthGuard><AppLayout /></AuthGuard>}>
               <Route path="/index" element={<Dashboard />} />
+              <Route path="/areas/list" element={<AreasList />} />
+              <Route path="/areas/:id" element={<AreaDetail />} />
               <Route path="/new-project/list" element={<ProjectList />} />
               <Route path="/new-project/add" element={<AddProject />} />
               <Route path="/sell/list" element={<SellList />} />

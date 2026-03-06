@@ -25,6 +25,18 @@ export const teamsService = {
     supabase.from('teams').delete().eq('id', id),
 };
 
+// ===== Areas =====
+export const areasService = {
+  getAll: () =>
+    supabase.from('areas').select('*').order('name'),
+  getById: (id: string) =>
+    supabase.from('areas').select('*').eq('id', id).single(),
+  create: (data: Database['public']['Tables']['areas']['Insert']) =>
+    supabase.from('areas').insert(data).select().single(),
+  update: (id: string, data: Database['public']['Tables']['areas']['Update']) =>
+    supabase.from('areas').update(data).eq('id', id),
+};
+
 // ===== Developers =====
 export const developersService = {
   getAll: () =>

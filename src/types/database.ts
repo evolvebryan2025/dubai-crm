@@ -581,6 +581,46 @@ export interface Database {
           updated_by?: string | null;
         };
       };
+      areas: {
+        Row: {
+          id: string;
+          name: string;
+          city: string;
+          new_count: number;
+          sell_count: number;
+          rent_count: number;
+          image_url: string | null;
+          latitude: string | null;
+          longitude: string | null;
+          country: string | null;
+          description: string | null;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          city?: string;
+          new_count?: number;
+          sell_count?: number;
+          rent_count?: number;
+          image_url?: string | null;
+          latitude?: string | null;
+          longitude?: string | null;
+          country?: string | null;
+          description?: string | null;
+        };
+        Update: {
+          name?: string;
+          city?: string;
+          new_count?: number;
+          sell_count?: number;
+          rent_count?: number;
+          image_url?: string | null;
+          latitude?: string | null;
+          longitude?: string | null;
+          country?: string | null;
+          description?: string | null;
+        };
+      };
       developers: {
         Row: {
           id: string;
@@ -698,5 +738,6 @@ export type SupabaseTeam = Database["public"]["Tables"]["teams"]["Row"];
 export type Setting = Database["public"]["Tables"]["settings"]["Row"];
 export type ListingImage = Database["public"]["Tables"]["listing_images"]["Row"];
 export type UploadBatch = Database["public"]["Tables"]["upload_batches"]["Row"];
+export type Area = Database["public"]["Tables"]["areas"]["Row"];
 export type Developer = Database["public"]["Tables"]["developers"]["Row"];
 export type NewProject = Database["public"]["Tables"]["new_projects"]["Row"];

@@ -11,6 +11,7 @@ import {
   TransactionOutlined,
   BarChartOutlined,
   SettingOutlined,
+  EnvironmentOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTabStore } from '../../stores/useTabStore';
@@ -23,6 +24,14 @@ const menuItems = [
     key: '/index',
     icon: <DashboardOutlined />,
     label: 'Dashboard',
+  },
+  {
+    key: 'areas',
+    icon: <EnvironmentOutlined />,
+    label: 'Areas',
+    children: [
+      { key: '/areas/list', label: 'Areas List' },
+    ],
   },
   {
     key: 'sell',
