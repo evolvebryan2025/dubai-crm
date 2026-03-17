@@ -707,6 +707,241 @@ export interface Database {
           brochure_url?: string | null;
         };
       };
+      viewings: {
+        Row: {
+          id: string;
+          listing_id: string | null;
+          lead_id: string | null;
+          agent_id: string;
+          contact_name: string;
+          contact_phone: string | null;
+          contact_email: string | null;
+          viewing_date: string;
+          viewing_time: string;
+          duration_minutes: number;
+          status: 'scheduled' | 'completed' | 'cancelled' | 'no_show';
+          feedback: string | null;
+          rating: number | null;
+          notes: string | null;
+          property_address: string | null;
+          property_type: string | null;
+          area: string | null;
+          created_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          listing_id?: string | null;
+          lead_id?: string | null;
+          agent_id: string;
+          contact_name: string;
+          contact_phone?: string | null;
+          contact_email?: string | null;
+          viewing_date: string;
+          viewing_time: string;
+          duration_minutes?: number;
+          status?: 'scheduled' | 'completed' | 'cancelled' | 'no_show';
+          feedback?: string | null;
+          rating?: number | null;
+          notes?: string | null;
+          property_address?: string | null;
+          property_type?: string | null;
+          area?: string | null;
+          created_by: string;
+        };
+        Update: {
+          listing_id?: string | null;
+          lead_id?: string | null;
+          agent_id?: string;
+          contact_name?: string;
+          contact_phone?: string | null;
+          contact_email?: string | null;
+          viewing_date?: string;
+          viewing_time?: string;
+          duration_minutes?: number;
+          status?: 'scheduled' | 'completed' | 'cancelled' | 'no_show';
+          feedback?: string | null;
+          rating?: number | null;
+          notes?: string | null;
+          property_address?: string | null;
+          property_type?: string | null;
+          area?: string | null;
+        };
+      };
+      tasks: {
+        Row: {
+          id: string;
+          title: string;
+          description: string | null;
+          type: 'follow_up' | 'viewing' | 'call' | 'meeting' | 'email' | 'other';
+          priority: 'low' | 'medium' | 'high' | 'urgent';
+          status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+          due_date: string | null;
+          due_time: string | null;
+          reminder_at: string | null;
+          assigned_to: string;
+          lead_id: string | null;
+          listing_id: string | null;
+          contact_id: string | null;
+          completed_at: string | null;
+          created_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          description?: string | null;
+          type?: 'follow_up' | 'viewing' | 'call' | 'meeting' | 'email' | 'other';
+          priority?: 'low' | 'medium' | 'high' | 'urgent';
+          status?: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+          due_date?: string | null;
+          due_time?: string | null;
+          reminder_at?: string | null;
+          assigned_to: string;
+          lead_id?: string | null;
+          listing_id?: string | null;
+          contact_id?: string | null;
+          completed_at?: string | null;
+          created_by: string;
+        };
+        Update: {
+          title?: string;
+          description?: string | null;
+          type?: 'follow_up' | 'viewing' | 'call' | 'meeting' | 'email' | 'other';
+          priority?: 'low' | 'medium' | 'high' | 'urgent';
+          status?: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+          due_date?: string | null;
+          due_time?: string | null;
+          reminder_at?: string | null;
+          assigned_to?: string;
+          lead_id?: string | null;
+          listing_id?: string | null;
+          contact_id?: string | null;
+          completed_at?: string | null;
+        };
+      };
+      notifications: {
+        Row: {
+          id: string;
+          user_id: string;
+          title: string;
+          message: string;
+          type: 'info' | 'success' | 'warning' | 'error';
+          entity_type: string | null;
+          entity_id: string | null;
+          read: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          title: string;
+          message: string;
+          type?: 'info' | 'success' | 'warning' | 'error';
+          entity_type?: string | null;
+          entity_id?: string | null;
+          read?: boolean;
+        };
+        Update: {
+          read?: boolean;
+        };
+      };
+      workflows: {
+        Row: {
+          id: string;
+          name: string;
+          description: string | null;
+          steps: Json;
+          is_active: boolean;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          description?: string | null;
+          steps?: Json;
+          is_active?: boolean;
+          created_by?: string | null;
+        };
+        Update: {
+          name?: string;
+          description?: string | null;
+          steps?: Json;
+          is_active?: boolean;
+        };
+      };
+      call_logs: {
+        Row: {
+          id: string;
+          agent_id: string;
+          contact_name: string;
+          contact_phone: string;
+          direction: 'inbound' | 'outbound';
+          status: 'answered' | 'missed' | 'voicemail' | 'busy';
+          duration_seconds: number;
+          recording_url: string | null;
+          lead_id: string | null;
+          contact_id: string | null;
+          notes: string | null;
+          source: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          agent_id: string;
+          contact_name: string;
+          contact_phone: string;
+          direction?: 'inbound' | 'outbound';
+          status?: 'answered' | 'missed' | 'voicemail' | 'busy';
+          duration_seconds?: number;
+          recording_url?: string | null;
+          lead_id?: string | null;
+          contact_id?: string | null;
+          notes?: string | null;
+          source?: string | null;
+        };
+        Update: {
+          status?: 'answered' | 'missed' | 'voicemail' | 'busy';
+          duration_seconds?: number;
+          recording_url?: string | null;
+          notes?: string | null;
+        };
+      };
+      messages: {
+        Row: {
+          id: string;
+          agent_id: string;
+          contact_name: string;
+          contact_phone: string;
+          channel: 'whatsapp' | 'sms' | 'email';
+          direction: 'inbound' | 'outbound';
+          content: string;
+          status: 'sent' | 'delivered' | 'read' | 'failed';
+          lead_id: string | null;
+          contact_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          agent_id: string;
+          contact_name: string;
+          contact_phone: string;
+          channel?: 'whatsapp' | 'sms' | 'email';
+          direction?: 'inbound' | 'outbound';
+          content: string;
+          status?: 'sent' | 'delivered' | 'read' | 'failed';
+          lead_id?: string | null;
+          contact_id?: string | null;
+        };
+        Update: {
+          status?: 'sent' | 'delivered' | 'read' | 'failed';
+          content?: string;
+        };
+      };
     };
     Functions: {
       get_user_role: {
@@ -741,3 +976,9 @@ export type UploadBatch = Database["public"]["Tables"]["upload_batches"]["Row"];
 export type Area = Database["public"]["Tables"]["areas"]["Row"];
 export type Developer = Database["public"]["Tables"]["developers"]["Row"];
 export type NewProject = Database["public"]["Tables"]["new_projects"]["Row"];
+export type SupabaseViewing = Database["public"]["Tables"]["viewings"]["Row"];
+export type SupabaseTask = Database["public"]["Tables"]["tasks"]["Row"];
+export type SupabaseNotification = Database["public"]["Tables"]["notifications"]["Row"];
+export type SupabaseWorkflow = Database["public"]["Tables"]["workflows"]["Row"];
+export type SupabaseCallLog = Database["public"]["Tables"]["call_logs"]["Row"];
+export type SupabaseMessage = Database["public"]["Tables"]["messages"]["Row"];

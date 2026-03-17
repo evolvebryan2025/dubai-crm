@@ -12,6 +12,15 @@ import {
   BarChartOutlined,
   SettingOutlined,
   EnvironmentOutlined,
+  ContactsOutlined,
+  EyeOutlined,
+  CheckSquareOutlined,
+  CalendarOutlined,
+  DollarOutlined,
+  BellOutlined,
+  BankOutlined,
+  ApartmentOutlined,
+  MessageOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTabStore } from '../../stores/useTabStore';
@@ -81,10 +90,51 @@ const menuItems = [
     ],
   },
   {
+    key: 'contacts',
+    icon: <ContactsOutlined />,
+    label: 'Contacts',
+    children: [
+      { key: '/contacts/list', label: 'Contact List' },
+      { key: '/contacts/add', label: 'Add Contact' },
+    ],
+  },
+  {
+    key: 'viewings',
+    icon: <EyeOutlined />,
+    label: 'Viewings',
+    children: [
+      { key: '/viewings/list', label: 'Viewings List' },
+      { key: '/viewings/add', label: 'Schedule Viewing' },
+    ],
+  },
+  {
+    key: 'tasks',
+    icon: <CheckSquareOutlined />,
+    label: 'Tasks',
+    children: [
+      { key: '/tasks/list', label: 'Task List' },
+      { key: '/tasks/add', label: 'Add Task' },
+    ],
+  },
+  {
+    key: '/calendar',
+    icon: <CalendarOutlined />,
+    label: 'Calendar',
+  },
+  {
     key: 'database',
     icon: <DatabaseOutlined />,
     label: 'Database',
     children: [{ key: '/database/projects', label: 'Database' }],
+  },
+  {
+    key: 'developers',
+    icon: <BankOutlined />,
+    label: 'Developers',
+    children: [
+      { key: '/developers/list', label: 'Developer List' },
+      { key: '/developers/add', label: 'Add Developer' },
+    ],
   },
   {
     key: 'transactions',
@@ -96,6 +146,11 @@ const menuItems = [
     ],
   },
   {
+    key: '/finance',
+    icon: <DollarOutlined />,
+    label: 'Finance',
+  },
+  {
     key: 'kpi',
     icon: <BarChartOutlined />,
     label: 'KPI Reports',
@@ -103,6 +158,24 @@ const menuItems = [
       { key: '/kpi/call', label: 'Contacts' },
       { key: '/kpi/viewings', label: 'Viewings' },
       { key: '/kpi/genaral', label: 'Insight Board' },
+    ],
+  },
+  {
+    key: '/communications',
+    icon: <MessageOutlined />,
+    label: 'Communications',
+  },
+  {
+    key: '/notifications',
+    icon: <BellOutlined />,
+    label: 'Notifications',
+  },
+  {
+    key: 'workflows',
+    icon: <ApartmentOutlined />,
+    label: 'Workflows',
+    children: [
+      { key: '/workflows/list', label: 'Workflow List' },
     ],
   },
   {

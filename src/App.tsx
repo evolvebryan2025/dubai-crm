@@ -37,6 +37,19 @@ const Roles = lazy(() => import('./pages/Admin/Roles'));
 const Watermark = lazy(() => import('./pages/Admin/Watermark'));
 const Integrations = lazy(() => import('./pages/Admin/Integrations'));
 const DataImport = lazy(() => import('./pages/Admin/DataImport'));
+const ContactList = lazy(() => import('./pages/Contacts/ContactList'));
+const AddContact = lazy(() => import('./pages/Contacts/AddContact'));
+const ViewingsList = lazy(() => import('./pages/Viewings/ViewingsList'));
+const AddViewing = lazy(() => import('./pages/Viewings/AddViewing'));
+const TasksList = lazy(() => import('./pages/Tasks/TasksList'));
+const AddTask = lazy(() => import('./pages/Tasks/AddTask'));
+const CalendarPage = lazy(() => import('./pages/Calendar/CalendarPage'));
+const DevelopersList = lazy(() => import('./pages/Developers/DevelopersList'));
+const AddDeveloper = lazy(() => import('./pages/Developers/AddDeveloper'));
+const FinanceDashboard = lazy(() => import('./pages/Finance/FinanceDashboard'));
+const NotificationCenter = lazy(() => import('./pages/Notifications/NotificationCenter'));
+const WorkflowList = lazy(() => import('./pages/Workflow/WorkflowList'));
+const CommunicationLog = lazy(() => import('./pages/Communications/CommunicationLog'));
 
 const LoadingFallback: React.FC = () => (
   <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -121,6 +134,19 @@ const App: React.FC = () => {
               <Route path="/system/watermark" element={<Watermark />} />
               <Route path="/system/integrations/company-profile" element={<Integrations />} />
               <Route path="/system/integrations/:tab" element={<Integrations />} />
+              <Route path="/contacts/list" element={<ContactList />} />
+              <Route path="/contacts/add" element={<AddContact />} />
+              <Route path="/viewings/list" element={<ViewingsList />} />
+              <Route path="/viewings/add" element={<AddViewing />} />
+              <Route path="/tasks/list" element={<TasksList />} />
+              <Route path="/tasks/add" element={<AddTask />} />
+              <Route path="/calendar" element={<CalendarPage />} />
+              <Route path="/developers/list" element={<DevelopersList />} />
+              <Route path="/developers/add" element={<AddDeveloper />} />
+              <Route path="/finance" element={<FinanceDashboard />} />
+              <Route path="/notifications" element={<NotificationCenter />} />
+              <Route path="/workflows/list" element={<WorkflowList />} />
+              <Route path="/communications" element={<CommunicationLog />} />
               <Route path="/system/data-import" element={<DataImport />} />
               <Route path="/" element={<Navigate to="/index" replace />} />
             </Route>

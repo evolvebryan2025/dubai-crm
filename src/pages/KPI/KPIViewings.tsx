@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Card,
   Row,
@@ -32,8 +32,14 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
+import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
-import { profilesService, teamsService } from '../../services/supabaseService';
+import {
+  profilesService,
+  teamsService,
+  viewingsService,
+  transactionsService,
+} from '../../services/supabaseService';
 import { profileToUser, supabaseTeamToTeam } from '../../utils/typeAdapters';
 import type { User, Team } from '../../types';
 
@@ -43,65 +49,42 @@ const { Title } = Typography;
 const PRIMARY_COLOR = '#00C4A1';
 
 // ---------------------------------------------------------------------------
-// Mock data for viewings over the last 7 days
-// ---------------------------------------------------------------------------
-const viewingsTrendData = [
-  { day: 'Mon', Completed: 28, Cancelled: 5 },
-  { day: 'Tue', Completed: 35, Cancelled: 8 },
-  { day: 'Wed', Completed: 22, Cancelled: 4 },
-  { day: 'Thu', Completed: 31, Cancelled: 6 },
-  { day: 'Fri', Completed: 40, Cancelled: 3 },
-  { day: 'Sat', Completed: 25, Cancelled: 7 },
-  { day: 'Sun', Completed: 17, Cancelled: 3 },
-];
-
-// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+interface RawViewing {
+  id: string;
+  agent_id: string;
+  contact_name?: string;
+  viewing_date: string;
+  viewing_time?: string;
+  status: 'scheduled' | 'completed' | 'cancelled' | 'no_show';
+  property_address?: string;
+  area?: string;
+  profiles?: { full_name: string; avatar_url?: string; team_id?: string } | null;
+  [key: string]: unknown;
+}
+
+interface RawTransaction {
+  id: string;
+  agent_id: string;
+  [key: string]: unknown;
+}
+
 interface AgentViewingData {
   key: string;
   agentName: string;
   totalViewings: number;
   completed: number;
   cancelled: number;
+  noShows: number;
   conversionRate: number;
-  topProperty: string;
 }
 
-const topProperties = [
-  'Marina Heights 2BR',
-  'Palm Villas V12',
-  'Bay Tower 1BR',
-  'Burj Vista PH1',
-  'Marina Gate 2BR',
-];
-
-function buildAgentViewingData(users: User[]): AgentViewingData[] {
-  const totals = [58, 49, 42, 38, 27];
-  const completedArr = [50, 41, 36, 32, 21];
-  const conversions = [15.2, 12.8, 11.5, 10.3, 8.7];
-
-  return users.map((user, idx) => {
-    const total = totals[idx] ?? 30;
-    const completed = completedArr[idx] ?? 25;
-    const cancelled = total - completed;
-    return {
-      key: user.id,
-      agentName: user.name,
-      totalViewings: total,
-      completed,
-      cancelled,
-      conversionRate: conversions[idx] ?? 10.0,
-      topProperty: topProperties[idx] ?? 'N/A',
-    };
-  });
+interface TrendPoint {
+  day: string;
+  Completed: number;
+  Cancelled: number;
 }
-
-// Summary totals
-const summaryTotalViewings = 234;
-const summaryCompleted = 198;
-const summaryCancelled = 36;
-const summaryConversionRate = 12.5;
 
 // ---------------------------------------------------------------------------
 // Component
@@ -112,17 +95,24 @@ const KPIViewings: React.FC = () => {
   const [selectedAgent, setSelectedAgent] = useState<string | undefined>(undefined);
   const [users, setUsers] = useState<User[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
+  const [allViewings, setAllViewings] = useState<RawViewing[]>([]);
+  const [allTransactions, setAllTransactions] = useState<RawTransaction[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // ---- Fetch all data once ----
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [profilesRes, teamsRes] = await Promise.all([
+        const [profilesRes, teamsRes, viewingsRes, transactionsRes] = await Promise.all([
           profilesService.getAll(),
           teamsService.getAll(),
+          viewingsService.getAll(),
+          transactionsService.getAll(),
         ]);
         if (profilesRes.data) setUsers(profilesRes.data.map(profileToUser));
         if (teamsRes.data) setTeams(teamsRes.data.map(supabaseTeamToTeam));
+        if (viewingsRes.data) setAllViewings(viewingsRes.data as unknown as RawViewing[]);
+        if (transactionsRes.data) setAllTransactions(transactionsRes.data as unknown as RawTransaction[]);
       } catch {
         message.error('Failed to load data');
       } finally {
@@ -132,7 +122,143 @@ const KPIViewings: React.FC = () => {
     fetchData();
   }, []);
 
-  const agentViewingData = buildAgentViewingData(users);
+  // ---- Build a lookup: profile id -> team_id ----
+  const profileTeamMap = useMemo(() => {
+    const map = new Map<string, string | undefined>();
+    users.forEach((u) => map.set(u.id, u.team_id));
+    return map;
+  }, [users]);
+
+  // ---- Filtered viewings ----
+  const filteredViewings = useMemo(() => {
+    let result = allViewings;
+
+    // Date range filter
+    if (dateRange && dateRange[0] && dateRange[1]) {
+      const start = dateRange[0].startOf('day');
+      const end = dateRange[1].endOf('day');
+      result = result.filter((v) => {
+        const d = dayjs(v.viewing_date);
+        return d.isAfter(start.subtract(1, 'millisecond')) && d.isBefore(end.add(1, 'millisecond'));
+      });
+    }
+
+    // Team filter
+    if (selectedTeam) {
+      result = result.filter((v) => {
+        const teamId = v.profiles?.team_id ?? profileTeamMap.get(v.agent_id);
+        return teamId === selectedTeam;
+      });
+    }
+
+    // Agent filter
+    if (selectedAgent) {
+      result = result.filter((v) => v.agent_id === selectedAgent);
+    }
+
+    return result;
+  }, [allViewings, dateRange, selectedTeam, selectedAgent, profileTeamMap]);
+
+  // ---- Filtered transactions (same agent / date scope) ----
+  const filteredTransactions = useMemo(() => {
+    let result = allTransactions;
+    if (selectedTeam) {
+      result = result.filter((t) => {
+        const teamId = profileTeamMap.get(t.agent_id);
+        return teamId === selectedTeam;
+      });
+    }
+    if (selectedAgent) {
+      result = result.filter((t) => t.agent_id === selectedAgent);
+    }
+    return result;
+  }, [allTransactions, selectedTeam, selectedAgent, profileTeamMap]);
+
+  // ---- Summary stats ----
+  const summaryTotalViewings = useMemo(() => filteredViewings.length, [filteredViewings]);
+  const summaryCompleted = useMemo(
+    () => filteredViewings.filter((v) => v.status === 'completed').length,
+    [filteredViewings],
+  );
+  const summaryCancelled = useMemo(
+    () => filteredViewings.filter((v) => v.status === 'cancelled').length,
+    [filteredViewings],
+  );
+  const summaryConversionRate = useMemo(() => {
+    if (summaryCompleted === 0) return 0;
+    return Math.round((filteredTransactions.length / summaryCompleted) * 1000) / 10;
+  }, [filteredTransactions, summaryCompleted]);
+
+  // ---- Viewings Over Time (group by day-of-week for last 7 days from filtered data) ----
+  const viewingsTrendData = useMemo<TrendPoint[]>(() => {
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const buckets: Record<string, { Completed: number; Cancelled: number }> = {};
+
+    // Build 7-day buckets ending today
+    for (let i = 6; i >= 0; i--) {
+      const label = dayjs().subtract(i, 'day').format('ddd');
+      const dateKey = dayjs().subtract(i, 'day').format('YYYY-MM-DD');
+      // Use dateKey as unique key, label for display
+      buckets[dateKey] = { Completed: 0, Cancelled: 0 };
+      void label; // used below
+    }
+
+    filteredViewings.forEach((v) => {
+      const dateKey = dayjs(v.viewing_date).format('YYYY-MM-DD');
+      if (buckets[dateKey]) {
+        if (v.status === 'completed') buckets[dateKey].Completed += 1;
+        if (v.status === 'cancelled') buckets[dateKey].Cancelled += 1;
+      }
+    });
+
+    return Object.entries(buckets).map(([dateKey, counts]) => ({
+      day: dayjs(dateKey).format('ddd') as (typeof dayNames)[number],
+      ...counts,
+    }));
+  }, [filteredViewings]);
+
+  // ---- Agent Viewing Details table data ----
+  const agentViewingData = useMemo<AgentViewingData[]>(() => {
+    const agentMap = new Map<string, { total: number; completed: number; cancelled: number; noShows: number }>();
+
+    filteredViewings.forEach((v) => {
+      const existing = agentMap.get(v.agent_id) ?? { total: 0, completed: 0, cancelled: 0, noShows: 0 };
+      existing.total += 1;
+      if (v.status === 'completed') existing.completed += 1;
+      if (v.status === 'cancelled') existing.cancelled += 1;
+      if (v.status === 'no_show') existing.noShows += 1;
+      agentMap.set(v.agent_id, existing);
+    });
+
+    // Count transactions per agent
+    const txnCountByAgent = new Map<string, number>();
+    filteredTransactions.forEach((t) => {
+      txnCountByAgent.set(t.agent_id, (txnCountByAgent.get(t.agent_id) ?? 0) + 1);
+    });
+
+    const userNameMap = new Map<string, string>();
+    users.forEach((u) => userNameMap.set(u.id, u.name));
+
+    const rows: AgentViewingData[] = [];
+    agentMap.forEach((counts, agentId) => {
+      const convRate = counts.completed > 0
+        ? Math.round(((txnCountByAgent.get(agentId) ?? 0) / counts.completed) * 1000) / 10
+        : 0;
+      rows.push({
+        key: agentId,
+        agentName: userNameMap.get(agentId) ?? 'Unknown Agent',
+        totalViewings: counts.total,
+        completed: counts.completed,
+        cancelled: counts.cancelled,
+        noShows: counts.noShows,
+        conversionRate: convRate,
+      });
+    });
+
+    // Sort descending by totalViewings
+    rows.sort((a, b) => b.totalViewings - a.totalViewings);
+    return rows;
+  }, [filteredViewings, filteredTransactions, users]);
 
   const handleReset = () => {
     setDateRange(null);
@@ -178,6 +304,14 @@ const KPIViewings: React.FC = () => {
       render: (val: number) => <span style={{ color: '#ff4d4f', fontWeight: 500 }}>{val}</span>,
     },
     {
+      title: 'No Shows',
+      dataIndex: 'noShows',
+      key: 'noShows',
+      width: 120,
+      align: 'center' as const,
+      render: (val: number) => <span style={{ color: '#faad14', fontWeight: 500 }}>{val}</span>,
+    },
+    {
       title: 'Conversion Rate (%)',
       dataIndex: 'conversionRate',
       key: 'conversionRate',
@@ -185,12 +319,6 @@ const KPIViewings: React.FC = () => {
       align: 'center' as const,
       render: (val: number) => <span style={{ color: '#1890ff', fontWeight: 500 }}>{val}%</span>,
       sorter: (a: AgentViewingData, b: AgentViewingData) => a.conversionRate - b.conversionRate,
-    },
-    {
-      title: 'Top Property',
-      dataIndex: 'topProperty',
-      key: 'topProperty',
-      width: 180,
     },
   ];
 

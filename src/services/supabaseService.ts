@@ -43,6 +43,8 @@ export const developersService = {
     supabase.from('developers').select('*').order('name'),
   create: (data: Database['public']['Tables']['developers']['Insert']) =>
     supabase.from('developers').insert(data).select().single(),
+  delete: (id: string) =>
+    supabase.from('developers').delete().eq('id', id),
 };
 
 // ===== Listings (replaces both sellListingsAPI and rentListingsAPI) =====
@@ -170,12 +172,114 @@ export const uploadBatchesService = {
     supabase.from('upload_batches').update(data).eq('id', id),
 };
 
+// ===== Viewings =====
+export const viewingsService = {
+  getAll: () =>
+    supabase.from('viewings').select('*, profiles!agent_id(*)').order('viewing_date', { ascending: false }),
+  getById: (id: string) =>
+    supabase.from('viewings').select('*, profiles!agent_id(*), leads(*), listings(*)').eq('id', id).single(),
+  getByAgent: (agentId: string) =>
+    supabase.from('viewings').select('*, profiles!agent_id(*)').eq('agent_id', agentId).order('viewing_date', { ascending: false }),
+  getByDateRange: (startDate: string, endDate: string) =>
+    supabase.from('viewings').select('*, profiles!agent_id(*)').gte('viewing_date', startDate).lte('viewing_date', endDate).order('viewing_date'),
+  create: (data: Database['public']['Tables']['viewings']['Insert']) =>
+    supabase.from('viewings').insert(data).select().single(),
+  update: (id: string, data: Database['public']['Tables']['viewings']['Update']) =>
+    supabase.from('viewings').update(data).eq('id', id),
+  delete: (id: string) =>
+    supabase.from('viewings').delete().eq('id', id),
+  updateStatus: (id: string, status: string) =>
+    supabase.from('viewings').update({ status }).eq('id', id),
+};
+
+// ===== Tasks =====
+export const tasksService = {
+  getAll: () =>
+    supabase.from('tasks').select('*, profiles!assigned_to(*)').order('due_date', { ascending: true }),
+  getById: (id: string) =>
+    supabase.from('tasks').select('*, profiles!assigned_to(*), leads(*), listings(*), contacts(*)').eq('id', id).single(),
+  getByAssignee: (userId: string) =>
+    supabase.from('tasks').select('*, profiles!assigned_to(*)').eq('assigned_to', userId).order('due_date', { ascending: true }),
+  getByDateRange: (startDate: string, endDate: string) =>
+    supabase.from('tasks').select('*, profiles!assigned_to(*)').gte('due_date', startDate).lte('due_date', endDate).order('due_date'),
+  create: (data: Database['public']['Tables']['tasks']['Insert']) =>
+    supabase.from('tasks').insert(data).select().single(),
+  update: (id: string, data: Database['public']['Tables']['tasks']['Update']) =>
+    supabase.from('tasks').update(data).eq('id', id),
+  delete: (id: string) =>
+    supabase.from('tasks').delete().eq('id', id),
+  updateStatus: (id: string, status: string) =>
+    supabase.from('tasks').update({ status, completed_at: status === 'completed' ? new Date().toISOString() : null }).eq('id', id),
+};
+
 // ===== Activity Logs =====
 export const activityLogsService = {
   getAll: () =>
     supabase.from('activity_logs').select('*, profiles!user_id(*)').order('created_at', { ascending: false }),
   create: (data: Database['public']['Tables']['activity_logs']['Insert']) =>
     supabase.from('activity_logs').insert(data),
+};
+
+// ===== Notifications =====
+export const notificationsService = {
+  getByUser: (userId: string) =>
+    supabase.from('notifications').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
+  getUnreadCount: async (userId: string) => {
+    const { count } = await supabase.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('read', false);
+    return count ?? 0;
+  },
+  markAsRead: (id: string) =>
+    supabase.from('notifications').update({ read: true }).eq('id', id),
+  markAllAsRead: (userId: string) =>
+    supabase.from('notifications').update({ read: true }).eq('user_id', userId).eq('read', false),
+  create: (data: Database['public']['Tables']['notifications']['Insert']) =>
+    supabase.from('notifications').insert(data).select().single(),
+  delete: (id: string) =>
+    supabase.from('notifications').delete().eq('id', id),
+};
+
+// ===== Workflows =====
+export const workflowsService = {
+  getAll: () =>
+    supabase.from('workflows').select('*').order('created_at', { ascending: false }),
+  getById: (id: string) =>
+    supabase.from('workflows').select('*').eq('id', id).single(),
+  create: (data: Database['public']['Tables']['workflows']['Insert']) =>
+    supabase.from('workflows').insert(data).select().single(),
+  update: (id: string, data: Database['public']['Tables']['workflows']['Update']) =>
+    supabase.from('workflows').update(data).eq('id', id),
+  delete: (id: string) =>
+    supabase.from('workflows').delete().eq('id', id),
+};
+
+// ===== Call Logs =====
+export const callLogsService = {
+  getAll: () =>
+    supabase.from('call_logs').select('*, profiles!agent_id(*)').order('created_at', { ascending: false }),
+  getByAgent: (agentId: string) =>
+    supabase.from('call_logs').select('*, profiles!agent_id(*)').eq('agent_id', agentId).order('created_at', { ascending: false }),
+  getByDateRange: (startDate: string, endDate: string) =>
+    supabase.from('call_logs').select('*, profiles!agent_id(*)').gte('created_at', startDate).lte('created_at', endDate).order('created_at', { ascending: false }),
+  create: (data: Database['public']['Tables']['call_logs']['Insert']) =>
+    supabase.from('call_logs').insert(data).select().single(),
+  update: (id: string, data: Database['public']['Tables']['call_logs']['Update']) =>
+    supabase.from('call_logs').update(data).eq('id', id),
+  delete: (id: string) =>
+    supabase.from('call_logs').delete().eq('id', id),
+};
+
+// ===== Messages (WhatsApp/SMS/Email) =====
+export const messagesService = {
+  getAll: () =>
+    supabase.from('messages').select('*, profiles!agent_id(*)').order('created_at', { ascending: false }),
+  getByAgent: (agentId: string) =>
+    supabase.from('messages').select('*, profiles!agent_id(*)').eq('agent_id', agentId).order('created_at', { ascending: false }),
+  getByChannel: (channel: string) =>
+    supabase.from('messages').select('*, profiles!agent_id(*)').eq('channel', channel).order('created_at', { ascending: false }),
+  create: (data: Database['public']['Tables']['messages']['Insert']) =>
+    supabase.from('messages').insert(data).select().single(),
+  delete: (id: string) =>
+    supabase.from('messages').delete().eq('id', id),
 };
 
 // ===== Settings =====
@@ -191,17 +295,18 @@ export const settingsService = {
 // ===== Dashboard (aggregate queries) =====
 export const dashboardService = {
   getStats: async () => {
-    const [transactions, listings, leads, contacts] = await Promise.all([
+    const [transactions, listings, leads, contacts, viewings] = await Promise.all([
       supabase.from('transactions').select('id', { count: 'exact', head: true }),
       supabase.from('listings').select('id', { count: 'exact', head: true }).in('status', ['active', 'under_offer']),
       supabase.from('leads').select('id', { count: 'exact', head: true }).in('status', ['new', 'contacted', 'qualified']),
       supabase.from('contacts').select('id', { count: 'exact', head: true }),
+      supabase.from('viewings').select('id', { count: 'exact', head: true }).eq('status', 'scheduled'),
     ]);
     return {
       transactions: transactions.count ?? 0,
       listings: listings.count ?? 0,
       leads: leads.count ?? 0,
-      viewings: 0,
+      viewings: viewings.count ?? 0,
       contacts: contacts.count ?? 0,
     };
   },

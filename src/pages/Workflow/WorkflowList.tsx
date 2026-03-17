@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Table,
   Button,
@@ -9,24 +9,28 @@ import {
   Typography,
   Row,
   Col,
+  Spin,
+  message,
+  Popconfirm,
+  Input,
+  Form,
+  Badge,
+  Empty,
 } from 'antd';
 import {
   EditOutlined,
   ArrowRightOutlined,
   CloseOutlined,
+  PlusOutlined,
+  DeleteOutlined,
+  SaveOutlined,
 } from '@ant-design/icons';
 import type { Workflow, WorkflowStep } from '../../types';
-
-// Inline mock data - no Supabase table for workflows
-const mockWorkflows: Workflow[] = [
-  { id: '1993', name: 'Transaction', steps: [{ id: 's1', name: 'Submit', type: 'start', next_step_id: 's2' }, { id: 's2', name: 'Manager Review', type: 'approval', next_step_id: 's3' }, { id: 's3', name: 'Finance Review', type: 'approval', next_step_id: 's4' }, { id: 's4', name: 'Complete', type: 'end' }] },
-  { id: '1997', name: 'Commission', steps: [{ id: 's1', name: 'Submit', type: 'start', next_step_id: 's2' }, { id: 's2', name: 'Approval', type: 'approval', next_step_id: 's3' }, { id: 's3', name: 'Complete', type: 'end' }] },
-  { id: '2000', name: 'Portals', steps: [{ id: 's1', name: 'Submit', type: 'start', next_step_id: 's2' }, { id: 's2', name: 'Review', type: 'approval', next_step_id: 's3' }, { id: 's3', name: 'Published', type: 'end' }] },
-  { id: '1995', name: 'Listings Status', steps: [{ id: 's1', name: 'Request', type: 'start', next_step_id: 's2' }, { id: 's2', name: 'Approve', type: 'approval', next_step_id: 's3' }, { id: 's3', name: 'Done', type: 'end' }] },
-  { id: '2004', name: 'Listings Update', steps: [{ id: 's1', name: 'Submit', type: 'start', next_step_id: 's2' }, { id: 's2', name: 'Review', type: 'approval', next_step_id: 's3' }, { id: 's3', name: 'Updated', type: 'end' }] },
-];
+import { workflowsService } from '../../services/supabaseService';
+import { useAuthStore } from '../../stores/useAuthStore';
 
 const { Title, Text } = Typography;
+const { TextArea } = Input;
 
 const PRIMARY_COLOR = '#00C4A1';
 
@@ -45,31 +49,205 @@ const stepTypeLabel: Record<string, string> = {
   end: 'End',
 };
 
+const DEFAULT_STEPS: WorkflowStep[] = [
+  { id: 's1', name: 'Submit', type: 'start', next_step_id: 's2' },
+  { id: 's2', name: 'Approval', type: 'approval', next_step_id: 's3' },
+  { id: 's3', name: 'Complete', type: 'end' },
+];
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 const WorkflowList: React.FC = () => {
+  const { user } = useAuthStore();
+
+  const [workflows, setWorkflows] = useState<Workflow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Editor modal
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(null);
+  const [editingSteps, setEditingSteps] = useState<WorkflowStep[]>([]);
+  const [saving, setSaving] = useState(false);
 
+  // Create modal
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [createForm] = Form.useForm();
+  const [creating, setCreating] = useState(false);
+
+  // -----------------------------------------------------------------------
+  // Fetch workflows
+  // -----------------------------------------------------------------------
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await workflowsService.getAll();
+      if (error) throw error;
+      if (data) {
+        setWorkflows(
+          data.map((w: any) => ({
+            id: w.id,
+            name: w.name,
+            description: w.description ?? '',
+            is_active: w.is_active ?? true,
+            steps: Array.isArray(w.steps) ? (w.steps as WorkflowStep[]) : [],
+          }))
+        );
+      }
+    } catch (error) {
+      console.error('Error fetching workflows:', error);
+      message.error('Failed to load workflows');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  // -----------------------------------------------------------------------
+  // Create workflow
+  // -----------------------------------------------------------------------
+  const handleCreate = async () => {
+    try {
+      const values = await createForm.validateFields();
+      setCreating(true);
+      const { error } = await workflowsService.create({
+        name: values.name,
+        description: values.description || null,
+        steps: DEFAULT_STEPS as any,
+        created_by: user?.id ?? null,
+      });
+      if (error) throw error;
+      message.success('Workflow created');
+      setCreateModalOpen(false);
+      createForm.resetFields();
+      fetchData();
+    } catch (error: any) {
+      if (error?.errorFields) return; // form validation
+      console.error('Error creating workflow:', error);
+      message.error('Failed to create workflow');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  // -----------------------------------------------------------------------
+  // Delete workflow
+  // -----------------------------------------------------------------------
+  const handleDelete = async (id: string) => {
+    try {
+      const { error } = await workflowsService.delete(id);
+      if (error) throw error;
+      message.success('Workflow deleted');
+      fetchData();
+    } catch (error) {
+      console.error('Error deleting workflow:', error);
+      message.error('Failed to delete workflow');
+    }
+  };
+
+  // -----------------------------------------------------------------------
+  // Edit modal
+  // -----------------------------------------------------------------------
   const handleEdit = (workflow: Workflow) => {
     setSelectedWorkflow(workflow);
+    setEditingSteps(workflow.steps.map((s) => ({ ...s })));
     setModalOpen(true);
   };
 
   const handleClose = () => {
     setModalOpen(false);
     setSelectedWorkflow(null);
+    setEditingSteps([]);
   };
 
+  const handleStepNameChange = (stepId: string, newName: string) => {
+    setEditingSteps((prev) =>
+      prev.map((s) => (s.id === stepId ? { ...s, name: newName } : s))
+    );
+  };
+
+  const handleAddStep = () => {
+    const newId = `s${Date.now()}`;
+    setEditingSteps((prev) => {
+      // Insert before the last (end) step, or append
+      const endIdx = prev.findIndex((s) => s.type === 'end');
+      const newStep: WorkflowStep = {
+        id: newId,
+        name: 'New Step',
+        type: 'approval',
+      };
+
+      if (endIdx === -1) {
+        return [...prev, newStep];
+      }
+
+      // Link the previous step to new step, new step to end step
+      const updated = [...prev];
+      const endStep = updated[endIdx];
+
+      // Find step that points to the end step
+      const prevStep = updated.find((s) => s.next_step_id === endStep.id);
+      if (prevStep) {
+        prevStep.next_step_id = newId;
+      }
+      newStep.next_step_id = endStep.id;
+
+      updated.splice(endIdx, 0, newStep);
+      return updated;
+    });
+  };
+
+  const handleRemoveStep = (stepId: string) => {
+    setEditingSteps((prev) => {
+      const step = prev.find((s) => s.id === stepId);
+      if (!step || step.type === 'start' || step.type === 'end') return prev;
+
+      // Re-link: find step that points to this one, point it to this step's next
+      const updated = prev
+        .filter((s) => s.id !== stepId)
+        .map((s) =>
+          s.next_step_id === stepId
+            ? { ...s, next_step_id: step.next_step_id }
+            : s
+        );
+      return updated;
+    });
+  };
+
+  const handleSaveSteps = async () => {
+    if (!selectedWorkflow) return;
+    setSaving(true);
+    try {
+      const { error } = await workflowsService.update(selectedWorkflow.id, {
+        steps: editingSteps as any,
+      });
+      if (error) throw error;
+      message.success('Workflow steps saved');
+      handleClose();
+      fetchData();
+    } catch (error) {
+      console.error('Error saving steps:', error);
+      message.error('Failed to save steps');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // -----------------------------------------------------------------------
   // Table columns
+  // -----------------------------------------------------------------------
   const columns = [
     {
       title: 'ID',
       dataIndex: 'id',
       key: 'id',
       width: 100,
-      render: (id: string) => <Text strong>#{id}</Text>,
+      render: (id: string) => (
+        <Text strong>#{id.length > 6 ? id.slice(0, 6) : id}</Text>
+      ),
     },
     {
       title: 'Name',
@@ -78,20 +256,69 @@ const WorkflowList: React.FC = () => {
       render: (name: string) => <Text style={{ fontWeight: 500 }}>{name}</Text>,
     },
     {
+      title: 'Description',
+      dataIndex: 'description',
+      key: 'description',
+      ellipsis: true,
+      render: (desc: string) => (
+        <Text type="secondary">{desc || '-'}</Text>
+      ),
+    },
+    {
+      title: 'Steps',
+      dataIndex: 'steps',
+      key: 'steps',
+      width: 100,
+      align: 'center' as const,
+      render: (steps: WorkflowStep[]) => (
+        <Badge
+          count={steps.length}
+          style={{ backgroundColor: PRIMARY_COLOR }}
+          showZero
+        />
+      ),
+    },
+    {
+      title: 'Status',
+      dataIndex: 'is_active',
+      key: 'is_active',
+      width: 100,
+      align: 'center' as const,
+      render: (active: boolean) => (
+        <Tag color={active ? 'green' : 'red'}>
+          {active ? 'Active' : 'Inactive'}
+        </Tag>
+      ),
+    },
+    {
       title: 'Actions',
       key: 'actions',
-      width: 120,
+      width: 180,
       align: 'center' as const,
-      render: (_: unknown, record: Workflow) => (
-        <Button
-          type="primary"
-          icon={<EditOutlined />}
-          size="small"
-          style={{ backgroundColor: PRIMARY_COLOR, borderColor: PRIMARY_COLOR }}
-          onClick={() => handleEdit(record)}
-        >
-          Edit
-        </Button>
+      render: (_: unknown, record: any) => (
+        <Space>
+          <Button
+            type="primary"
+            icon={<EditOutlined />}
+            size="small"
+            style={{ backgroundColor: PRIMARY_COLOR, borderColor: PRIMARY_COLOR }}
+            onClick={() => handleEdit(record)}
+          >
+            Edit
+          </Button>
+          <Popconfirm
+            title="Delete this workflow?"
+            onConfirm={() => handleDelete(record.id)}
+            okText="Yes"
+            cancelText="No"
+          >
+            <Button
+              danger
+              icon={<DeleteOutlined />}
+              size="small"
+            />
+          </Popconfirm>
+        </Space>
       ),
     },
   ];
@@ -121,22 +348,71 @@ const WorkflowList: React.FC = () => {
   return (
     <div style={{ padding: 24, background: '#f5f7fa', minHeight: '100%' }}>
       {/* Page title */}
-      <Title level={4} style={{ margin: 0, marginBottom: 20 }}>
-        Workflows
-      </Title>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <Title level={4} style={{ margin: 0 }}>
+          Workflows
+        </Title>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          style={{ backgroundColor: PRIMARY_COLOR, borderColor: PRIMARY_COLOR, borderRadius: 8 }}
+          onClick={() => setCreateModalOpen(true)}
+        >
+          Add Workflow
+        </Button>
+      </div>
 
       {/* ----------------------------------------------------------------
           WORKFLOW TABLE
           ---------------------------------------------------------------- */}
       <Card style={{ borderRadius: 12 }} styles={{ body: { padding: 0 } }}>
-        <Table
-          columns={columns}
-          dataSource={mockWorkflows}
-          rowKey="id"
-          pagination={false}
-          size="middle"
-        />
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: 60 }}>
+            <Spin size="large" />
+          </div>
+        ) : workflows.length === 0 ? (
+          <div style={{ padding: 60 }}>
+            <Empty description="No workflows found" />
+          </div>
+        ) : (
+          <Table
+            columns={columns}
+            dataSource={workflows}
+            rowKey="id"
+            pagination={false}
+            size="middle"
+          />
+        )}
       </Card>
+
+      {/* ----------------------------------------------------------------
+          CREATE WORKFLOW MODAL
+          ---------------------------------------------------------------- */}
+      <Modal
+        open={createModalOpen}
+        onCancel={() => {
+          setCreateModalOpen(false);
+          createForm.resetFields();
+        }}
+        onOk={handleCreate}
+        confirmLoading={creating}
+        title="Create Workflow"
+        okText="Create"
+        okButtonProps={{ style: { backgroundColor: PRIMARY_COLOR, borderColor: PRIMARY_COLOR } }}
+      >
+        <Form form={createForm} layout="vertical" style={{ marginTop: 16 }}>
+          <Form.Item
+            name="name"
+            label="Name"
+            rules={[{ required: true, message: 'Please enter a workflow name' }]}
+          >
+            <Input placeholder="e.g. Transaction Approval" />
+          </Form.Item>
+          <Form.Item name="description" label="Description">
+            <TextArea rows={3} placeholder="Describe the workflow..." />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       {/* ----------------------------------------------------------------
           WORKFLOW EDITOR MODAL
@@ -144,13 +420,28 @@ const WorkflowList: React.FC = () => {
       <Modal
         open={modalOpen}
         onCancel={handleClose}
-        footer={null}
+        footer={
+          <Space>
+            <Button onClick={handleClose}>Close</Button>
+            <Button
+              type="primary"
+              icon={<SaveOutlined />}
+              loading={saving}
+              style={{ backgroundColor: PRIMARY_COLOR, borderColor: PRIMARY_COLOR }}
+              onClick={handleSaveSteps}
+            >
+              Save Steps
+            </Button>
+          </Space>
+        }
         width={800}
         title={
           <Space>
             <span>Workflow Editor</span>
             {selectedWorkflow && (
-              <Tag color={PRIMARY_COLOR}>#{selectedWorkflow.id} - {selectedWorkflow.name}</Tag>
+              <Tag color={PRIMARY_COLOR}>
+                #{selectedWorkflow.id.length > 6 ? selectedWorkflow.id.slice(0, 6) : selectedWorkflow.id} - {selectedWorkflow.name}
+              </Tag>
             )}
           </Space>
         }
@@ -170,7 +461,7 @@ const WorkflowList: React.FC = () => {
                 gap: 0,
               }}
             >
-              {getOrderedSteps(selectedWorkflow.steps).map((step, idx, arr) => (
+              {getOrderedSteps(editingSteps).map((step, idx, arr) => (
                 <React.Fragment key={step.id}>
                   {/* Step Card */}
                   <Card
@@ -199,12 +490,24 @@ const WorkflowList: React.FC = () => {
                       },
                     }}
                   >
-                    <Text strong style={{ fontSize: 14 }}>
-                      {step.name}
-                    </Text>
+                    <Input
+                      value={step.name}
+                      onChange={(e) => handleStepNameChange(step.id, e.target.value)}
+                      style={{ textAlign: 'center', fontWeight: 600, fontSize: 14 }}
+                      variant="borderless"
+                    />
                     <Tag color={stepTypeColor[step.type] || 'default'}>
                       {stepTypeLabel[step.type] || step.type}
                     </Tag>
+                    {step.type === 'approval' && (
+                      <Button
+                        type="text"
+                        danger
+                        size="small"
+                        icon={<DeleteOutlined />}
+                        onClick={() => handleRemoveStep(step.id)}
+                      />
+                    )}
                   </Card>
 
                   {/* Arrow connector (not after last step) */}
@@ -231,13 +534,25 @@ const WorkflowList: React.FC = () => {
               ))}
             </div>
 
+            {/* Add step button */}
+            <div style={{ textAlign: 'center', marginBottom: 16 }}>
+              <Button
+                type="dashed"
+                icon={<PlusOutlined />}
+                onClick={handleAddStep}
+                style={{ borderColor: PRIMARY_COLOR, color: PRIMARY_COLOR }}
+              >
+                Add Step
+              </Button>
+            </div>
+
             {/* Step details table */}
             <div style={{ marginTop: 24 }}>
               <Title level={5} style={{ marginBottom: 12 }}>
                 Step Details
               </Title>
               <Row gutter={[12, 12]}>
-                {getOrderedSteps(selectedWorkflow.steps).map((step, idx) => (
+                {getOrderedSteps(editingSteps).map((step, idx) => (
                   <Col xs={24} sm={12} md={8} key={step.id}>
                     <Card
                       size="small"
@@ -253,10 +568,15 @@ const WorkflowList: React.FC = () => {
                             {stepTypeLabel[step.type] || step.type}
                           </Tag>
                         </div>
-                        <Text strong>{step.name}</Text>
+                        <Input
+                          size="small"
+                          value={step.name}
+                          onChange={(e) => handleStepNameChange(step.id, e.target.value)}
+                          style={{ fontWeight: 600 }}
+                        />
                         {step.next_step_id && (
                           <Text type="secondary" style={{ fontSize: 11 }}>
-                            Next: {selectedWorkflow.steps.find((s) => s.id === step.next_step_id)?.name || '-'}
+                            Next: {editingSteps.find((s) => s.id === step.next_step_id)?.name || '-'}
                           </Text>
                         )}
                       </Space>
@@ -264,11 +584,6 @@ const WorkflowList: React.FC = () => {
                   </Col>
                 ))}
               </Row>
-            </div>
-
-            {/* Close button */}
-            <div style={{ textAlign: 'right', marginTop: 24 }}>
-              <Button onClick={handleClose}>Close</Button>
             </div>
           </>
         )}

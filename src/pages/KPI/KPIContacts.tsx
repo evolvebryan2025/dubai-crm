@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Card,
   Row,
@@ -32,8 +32,9 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
+import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
-import { profilesService, teamsService } from '../../services/supabaseService';
+import { profilesService, teamsService, callLogsService } from '../../services/supabaseService';
 import { profileToUser, supabaseTeamToTeam } from '../../utils/typeAdapters';
 import type { User, Team } from '../../types';
 
@@ -45,6 +46,20 @@ const PRIMARY_COLOR = '#00C4A1';
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+interface CallLog {
+  id: string;
+  agent_id: string;
+  contact_name?: string;
+  contact_phone?: string;
+  direction?: 'inbound' | 'outbound';
+  status: 'answered' | 'missed' | 'voicemail' | 'busy';
+  duration_seconds?: number;
+  notes?: string;
+  source?: string;
+  created_at: string;
+  profiles?: { full_name?: string; avatar_url?: string; team_id?: string } | null;
+}
+
 interface AgentCallData {
   key: string;
   agentId: string;
@@ -56,34 +71,15 @@ interface AgentCallData {
   lastCallDate: string;
 }
 
-function buildAgentCallData(users: User[]): AgentCallData[] {
-  const totals = [187, 165, 142, 128, 93];
-  const answeredArr = [152, 130, 112, 98, 68];
-  const durations = ['4:12', '5:01', '3:45', '4:58', '3:22'];
-  const dates = ['2024-12-01', '2024-11-30', '2024-12-02', '2024-11-29', '2024-11-28'];
-
-  return users.map((user, idx) => {
-    const total = totals[idx] ?? 100 + Math.floor(Math.random() * 100);
-    const answered = answeredArr[idx] ?? Math.floor(total * 0.75);
-    const missed = total - answered;
-    return {
-      key: user.id,
-      agentId: user.id,
-      agentName: user.name,
-      totalCalls: total,
-      answered,
-      missed,
-      avgDuration: durations[idx] ?? '4:00',
-      lastCallDate: dates[idx] ?? '2024-11-25',
-    };
-  });
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function formatDuration(seconds: number): string {
+  if (!seconds || !isFinite(seconds)) return '0:00';
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
 }
-
-// Summary totals
-const summaryTotalCalls = 1245;
-const summaryAnswered = 980;
-const summaryMissed = 265;
-const summaryAvgDuration = '4:32';
 
 // ---------------------------------------------------------------------------
 // Component
@@ -94,17 +90,20 @@ const KPIContacts: React.FC = () => {
   const [selectedAgent, setSelectedAgent] = useState<string | undefined>(undefined);
   const [users, setUsers] = useState<User[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
+  const [callLogs, setCallLogs] = useState<CallLog[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [profilesRes, teamsRes] = await Promise.all([
+        const [profilesRes, teamsRes, callLogsRes] = await Promise.all([
           profilesService.getAll(),
           teamsService.getAll(),
+          Promise.resolve(callLogsService.getAll()).catch(() => ({ data: null })),
         ]);
         if (profilesRes.data) setUsers(profilesRes.data.map(profileToUser));
         if (teamsRes.data) setTeams(teamsRes.data.map(supabaseTeamToTeam));
+        if (callLogsRes.data) setCallLogs(callLogsRes.data as unknown as CallLog[]);
       } catch {
         message.error('Failed to load data');
       } finally {
@@ -114,12 +113,134 @@ const KPIContacts: React.FC = () => {
     fetchData();
   }, []);
 
-  const agentCallData = buildAgentCallData(users);
-  const chartData = agentCallData.map((a) => ({
-    name: a.agentName.split(' ')[0],
-    Answered: a.answered,
-    Missed: a.missed,
-  }));
+  // Build a map of user id -> team_id for filtering
+  const userTeamMap = useMemo(() => {
+    const map = new Map<string, string | undefined>();
+    users.forEach((u) => map.set(u.id, u.team_id));
+    return map;
+  }, [users]);
+
+  // Build a map of user id -> name for display
+  const userNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    users.forEach((u) => map.set(u.id, u.name));
+    return map;
+  }, [users]);
+
+  // Filtered call logs based on dateRange, selectedTeam, selectedAgent
+  const filteredLogs = useMemo(() => {
+    let logs = callLogs;
+
+    // Filter by date range
+    if (dateRange && dateRange[0] && dateRange[1]) {
+      const start = dateRange[0].startOf('day').toISOString();
+      const end = dateRange[1].endOf('day').toISOString();
+      logs = logs.filter((log) => log.created_at >= start && log.created_at <= end);
+    }
+
+    // Filter by team (via agent's team_id)
+    if (selectedTeam) {
+      logs = logs.filter((log) => {
+        const agentTeamId = log.profiles?.team_id ?? userTeamMap.get(log.agent_id);
+        return agentTeamId === selectedTeam;
+      });
+    }
+
+    // Filter by agent
+    if (selectedAgent) {
+      logs = logs.filter((log) => log.agent_id === selectedAgent);
+    }
+
+    return logs;
+  }, [callLogs, dateRange, selectedTeam, selectedAgent, userTeamMap]);
+
+  // Summary stats
+  const summaryTotalCalls = filteredLogs.length;
+  const summaryAnswered = useMemo(
+    () => filteredLogs.filter((l) => l.status === 'answered').length,
+    [filteredLogs],
+  );
+  const summaryMissed = useMemo(
+    () => filteredLogs.filter((l) => l.status === 'missed').length,
+    [filteredLogs],
+  );
+  const summaryAvgDuration = useMemo(() => {
+    const answeredLogs = filteredLogs.filter((l) => l.status === 'answered' && l.duration_seconds);
+    if (answeredLogs.length === 0) return '0:00';
+    const totalSeconds = answeredLogs.reduce((sum, l) => sum + (l.duration_seconds ?? 0), 0);
+    return formatDuration(totalSeconds / answeredLogs.length);
+  }, [filteredLogs]);
+
+  // Agent call data (table + chart)
+  const agentCallData: AgentCallData[] = useMemo(() => {
+    const agentMap = new Map<
+      string,
+      { totalCalls: number; answered: number; missed: number; totalDuration: number; answeredCount: number; lastCall: string }
+    >();
+
+    filteredLogs.forEach((log) => {
+      const agentId = log.agent_id;
+      if (!agentId) return;
+
+      const existing = agentMap.get(agentId) ?? {
+        totalCalls: 0,
+        answered: 0,
+        missed: 0,
+        totalDuration: 0,
+        answeredCount: 0,
+        lastCall: '',
+      };
+
+      existing.totalCalls += 1;
+      if (log.status === 'answered') {
+        existing.answered += 1;
+        if (log.duration_seconds) {
+          existing.totalDuration += log.duration_seconds;
+          existing.answeredCount += 1;
+        }
+      }
+      if (log.status === 'missed') {
+        existing.missed += 1;
+      }
+      if (!existing.lastCall || log.created_at > existing.lastCall) {
+        existing.lastCall = log.created_at;
+      }
+
+      agentMap.set(agentId, existing);
+    });
+
+    const result: AgentCallData[] = [];
+    agentMap.forEach((stats, agentId) => {
+      const agentName =
+        userNameMap.get(agentId) ?? 'Unknown Agent';
+      const avgSec = stats.answeredCount > 0 ? stats.totalDuration / stats.answeredCount : 0;
+
+      result.push({
+        key: agentId,
+        agentId,
+        agentName,
+        totalCalls: stats.totalCalls,
+        answered: stats.answered,
+        missed: stats.missed,
+        avgDuration: formatDuration(avgSec),
+        lastCallDate: stats.lastCall ? dayjs(stats.lastCall).format('YYYY-MM-DD') : '-',
+      });
+    });
+
+    // Sort by total calls descending
+    result.sort((a, b) => b.totalCalls - a.totalCalls);
+    return result;
+  }, [filteredLogs, userNameMap]);
+
+  const chartData = useMemo(
+    () =>
+      agentCallData.map((a) => ({
+        name: a.agentName.split(' ')[0],
+        Answered: a.answered,
+        Missed: a.missed,
+      })),
+    [agentCallData],
+  );
 
   const handleReset = () => {
     setDateRange(null);
@@ -177,7 +298,7 @@ const KPIContacts: React.FC = () => {
       key: 'lastCallDate',
       width: 140,
       align: 'center' as const,
-      render: (date: string) => new Date(date).toLocaleDateString(),
+      render: (date: string) => (date && date !== '-' ? new Date(date).toLocaleDateString() : '-'),
     },
   ];
 

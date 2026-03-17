@@ -1,18 +1,18 @@
 import React from 'react';
-import { Layout, Badge, Dropdown, Avatar, Breadcrumb, Popover, List, Select, Button } from 'antd';
+import { Layout, Dropdown, Avatar, Breadcrumb, Select, Button } from 'antd';
 import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  BellOutlined,
   CalendarOutlined,
   UserOutlined,
   LogoutOutlined,
   GlobalOutlined,
 } from '@ant-design/icons';
-import { useLocation, Link } from 'react-router-dom';
+import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { useAppStore } from '../../stores/useAppStore';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { labelMap } from './Sidebar';
+import NotificationBell from './NotificationBell';
 
 const { Header: AntHeader } = Layout;
 
@@ -24,10 +24,9 @@ const langOptions = [
 
 const Header: React.FC = () => {
   const location = useLocation();
-  const { sidebarCollapsed, toggleSidebar, notifications, language, setLanguage, markNotificationRead } = useAppStore();
+  const navigate = useNavigate();
+  const { sidebarCollapsed, toggleSidebar, language, setLanguage } = useAppStore();
   const { user, logout } = useAuthStore();
-
-  const unreadCount = notifications.filter((n) => !n.read).length;
 
   const pathParts = location.pathname.split('/').filter(Boolean);
   const breadcrumbItems = [
@@ -38,28 +37,6 @@ const Header: React.FC = () => {
       return { title: idx === pathParts.length - 1 ? label : <Link to={path}>{label}</Link> };
     }),
   ];
-
-  const notificationContent = (
-    <List
-      style={{ width: 300, maxHeight: 400, overflow: 'auto' }}
-      dataSource={notifications}
-      renderItem={(item) => (
-        <List.Item
-          style={{
-            background: item.read ? 'transparent' : '#f0faf7',
-            cursor: 'pointer',
-            padding: '8px 12px',
-          }}
-          onClick={() => markNotificationRead(item.id)}
-        >
-          <List.Item.Meta
-            title={<span style={{ fontWeight: item.read ? 400 : 600 }}>{item.title}</span>}
-            description={item.message}
-          />
-        </List.Item>
-      )}
-    />
-  );
 
   const userMenuItems = {
     items: [
@@ -98,13 +75,12 @@ const Header: React.FC = () => {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-        <CalendarOutlined style={{ fontSize: 18, color: '#666', cursor: 'pointer' }} />
+        <CalendarOutlined
+          style={{ fontSize: 18, color: '#666', cursor: 'pointer' }}
+          onClick={() => navigate('/calendar')}
+        />
 
-        <Popover content={notificationContent} title="Notifications" trigger="click" placement="bottomRight">
-          <Badge count={unreadCount} size="small">
-            <BellOutlined style={{ fontSize: 18, color: '#666', cursor: 'pointer' }} />
-          </Badge>
-        </Popover>
+        <NotificationBell />
 
         <Select
           value={language}

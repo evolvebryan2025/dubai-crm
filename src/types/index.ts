@@ -284,6 +284,73 @@ export interface TabItem {
   closable: boolean;
 }
 
+export interface Contact {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  company?: string;
+  designation?: string;
+  nationality?: string;
+  area_tags: string[];
+  source?: string;
+  notes?: string;
+  agent_id?: string;
+  agent?: User;
+  created_at: string;
+}
+
+export interface Viewing {
+  id: string;
+  listing_id?: string;
+  lead_id?: string;
+  agent_id: string;
+  agent?: User;
+  contact_name: string;
+  contact_phone?: string;
+  contact_email?: string;
+  viewing_date: string;
+  viewing_time: string;
+  duration_minutes: number;
+  status: 'scheduled' | 'completed' | 'cancelled' | 'no_show';
+  feedback?: string;
+  rating?: number;
+  notes?: string;
+  property_address?: string;
+  property_type?: string;
+  area?: string;
+  created_at: string;
+}
+
+export interface Task {
+  id: string;
+  title: string;
+  description?: string;
+  type: 'follow_up' | 'viewing' | 'call' | 'meeting' | 'email' | 'other';
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+  due_date?: string;
+  due_time?: string;
+  reminder_at?: string;
+  assigned_to: string;
+  assignee?: User;
+  lead_id?: string;
+  listing_id?: string;
+  contact_id?: string;
+  completed_at?: string;
+  created_at: string;
+}
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  start: string;
+  end?: string;
+  type: 'viewing' | 'task' | 'meeting' | 'follow_up' | 'call';
+  status: string;
+  color: string;
+}
+
 export interface DashboardStats {
   transactions: number;
   listings: number;

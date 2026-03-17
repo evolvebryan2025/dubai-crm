@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Card,
   Row,
@@ -33,10 +33,14 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
+import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
-import { teamsService, profilesService } from '../../services/supabaseService';
-import { profileToUser } from '../../utils/typeAdapters';
-import type { User, Team } from '../../types';
+import {
+  teamsService,
+  profilesService,
+  transactionsService,
+  leadsService,
+} from '../../services/supabaseService';
 
 const { RangePicker } = DatePicker;
 const { Title } = Typography;
@@ -54,51 +58,6 @@ const COLORS = {
 };
 
 const PIE_COLORS = [COLORS.teal, COLORS.blue, COLORS.purple, COLORS.yellow, COLORS.red];
-
-// ---------------------------------------------------------------------------
-// Mock data
-// ---------------------------------------------------------------------------
-
-// Leads trend over 12 months
-const leadsTrendData = [
-  { month: 'Jan', Leads: 45 },
-  { month: 'Feb', Leads: 62 },
-  { month: 'Mar', Leads: 58 },
-  { month: 'Apr', Leads: 75 },
-  { month: 'May', Leads: 88 },
-  { month: 'Jun', Leads: 95 },
-  { month: 'Jul', Leads: 82 },
-  { month: 'Aug', Leads: 110 },
-  { month: 'Sep', Leads: 98 },
-  { month: 'Oct', Leads: 125 },
-  { month: 'Nov', Leads: 138 },
-  { month: 'Dec', Leads: 150 },
-];
-
-// Deal distribution by property type
-const dealDistributionData = [
-  { name: 'Apartment', value: 45 },
-  { name: 'Villa', value: 25 },
-  { name: 'Penthouse', value: 15 },
-  { name: 'Townhouse', value: 10 },
-  { name: 'Office', value: 5 },
-];
-
-// Transactions per team
-const transactionsPerTeamData = [
-  { name: 'Sales Team A', Transactions: 48 },
-  { name: 'Sales Team B', Transactions: 35 },
-  { name: 'Leasing Team', Transactions: 22 },
-];
-
-// Top agents by revenue - built dynamically from loaded users
-function buildTopAgentRevenueData(users: User[]) {
-  const defaultRevenues = [4200000, 3500000, 2800000, 1900000, 1100000];
-  return users.map((user, idx) => ({
-    name: user.name.split(' ')[0],
-    Revenue: defaultRevenues[idx] ?? 1000000,
-  }));
-}
 
 // Custom label for PieChart
 const renderCustomLabel = ({
@@ -142,19 +101,25 @@ const KPIInsightBoard: React.FC = () => {
   const [dateRange, setDateRange] = useState<[Dayjs | null, Dayjs | null] | null>(null);
   const [selectedTeam, setSelectedTeam] = useState<string | undefined>(undefined);
   const [selectedPeriod, setSelectedPeriod] = useState<string | undefined>(undefined);
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
+  const [teams, setTeams] = useState<any[]>([]);
+  const [profiles, setProfiles] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [leads, setLeads] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [teamsRes, profilesRes] = await Promise.all([
+        const [teamsRes, profilesRes, transactionsRes, leadsRes] = await Promise.all([
           teamsService.getAll(),
           profilesService.getAll(),
+          transactionsService.getAll(),
+          leadsService.getAll(),
         ]);
-        if (teamsRes.data) setTeams(teamsRes.data.map((t) => ({ id: t.id, name: t.name, created_at: t.created_at })));
-        if (profilesRes.data) setUsers(profilesRes.data.map(profileToUser));
+        if (teamsRes.data) setTeams(teamsRes.data);
+        if (profilesRes.data) setProfiles(profilesRes.data);
+        if (transactionsRes.data) setTransactions(transactionsRes.data);
+        if (leadsRes.data) setLeads(leadsRes.data);
       } catch {
         message.error('Failed to load data');
       } finally {
@@ -164,7 +129,168 @@ const KPIInsightBoard: React.FC = () => {
     fetchData();
   }, []);
 
-  const topAgentRevenueData = buildTopAgentRevenueData(users);
+  // -----------------------------------------------------------------------
+  // Build profile lookup maps
+  // -----------------------------------------------------------------------
+  const profileMap = useMemo(() => {
+    const map: Record<string, any> = {};
+    for (const p of profiles) {
+      map[p.id] = p;
+    }
+    return map;
+  }, [profiles]);
+
+  const teamMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const t of teams) {
+      map[t.id] = t.name;
+    }
+    return map;
+  }, [teams]);
+
+  // -----------------------------------------------------------------------
+  // Filtered data based on dateRange and selectedTeam
+  // -----------------------------------------------------------------------
+  const filteredTransactions = useMemo(() => {
+    let filtered = transactions;
+
+    if (dateRange && dateRange[0] && dateRange[1]) {
+      const start = dateRange[0].startOf('day');
+      const end = dateRange[1].endOf('day');
+      filtered = filtered.filter((t) => {
+        const d = dayjs(t.deal_date || t.created_at);
+        return d.isAfter(start) && d.isBefore(end);
+      });
+    }
+
+    if (selectedTeam) {
+      filtered = filtered.filter((t) => {
+        const profile = profileMap[t.agent_id];
+        return profile && profile.team_id === selectedTeam;
+      });
+    }
+
+    return filtered;
+  }, [transactions, dateRange, selectedTeam, profileMap]);
+
+  const filteredLeads = useMemo(() => {
+    let filtered = leads;
+
+    if (dateRange && dateRange[0] && dateRange[1]) {
+      const start = dateRange[0].startOf('day');
+      const end = dateRange[1].endOf('day');
+      filtered = filtered.filter((l) => {
+        const d = dayjs(l.created_at);
+        return d.isAfter(start) && d.isBefore(end);
+      });
+    }
+
+    if (selectedTeam) {
+      filtered = filtered.filter((l) => {
+        const profile = profileMap[l.assigned_agent_id];
+        return profile && profile.team_id === selectedTeam;
+      });
+    }
+
+    return filtered;
+  }, [leads, dateRange, selectedTeam, profileMap]);
+
+  // -----------------------------------------------------------------------
+  // Summary card stats
+  // -----------------------------------------------------------------------
+  const totalRevenue = useMemo(
+    () => filteredTransactions.reduce((sum, t) => sum + (Number(t.deal_value) || 0), 0),
+    [filteredTransactions],
+  );
+
+  const totalDeals = filteredTransactions.length;
+
+  const avgDealSize = totalDeals > 0 ? totalRevenue / totalDeals : 0;
+
+  const activeLeads = useMemo(
+    () => filteredLeads.filter((l) => ['new', 'contacted', 'qualified'].includes(l.status)).length,
+    [filteredLeads],
+  );
+
+  // -----------------------------------------------------------------------
+  // Leads Trend (Area Chart) — group by month for last 12 months
+  // -----------------------------------------------------------------------
+  const leadsTrendData = useMemo(() => {
+    const months: { key: string; label: string }[] = [];
+    for (let i = 11; i >= 0; i--) {
+      const m = dayjs().subtract(i, 'month');
+      months.push({ key: m.format('YYYY-MM'), label: m.format('MMM') });
+    }
+
+    const counts: Record<string, number> = {};
+    for (const m of months) counts[m.key] = 0;
+
+    for (const l of filteredLeads) {
+      const key = dayjs(l.created_at).format('YYYY-MM');
+      if (counts[key] !== undefined) {
+        counts[key]++;
+      }
+    }
+
+    return months.map((m) => ({ month: m.label, Leads: counts[m.key] }));
+  }, [filteredLeads]);
+
+  // -----------------------------------------------------------------------
+  // Deal Distribution (Pie Chart) — group by property type from listing
+  // -----------------------------------------------------------------------
+  const dealDistributionData = useMemo(() => {
+    const typeCounts: Record<string, number> = {};
+
+    for (const t of filteredTransactions) {
+      const propType = t.listings?.property_type || 'Other';
+      const label = propType.charAt(0).toUpperCase() + propType.slice(1);
+      typeCounts[label] = (typeCounts[label] || 0) + 1;
+    }
+
+    return Object.entries(typeCounts)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+  }, [filteredTransactions]);
+
+  // -----------------------------------------------------------------------
+  // Transactions Per Team
+  // -----------------------------------------------------------------------
+  const transactionsPerTeamData = useMemo(() => {
+    const teamCounts: Record<string, number> = {};
+
+    for (const t of filteredTransactions) {
+      const profile = profileMap[t.agent_id];
+      const teamName = profile?.team_id ? (teamMap[profile.team_id] || 'Unknown') : 'Unassigned';
+      teamCounts[teamName] = (teamCounts[teamName] || 0) + 1;
+    }
+
+    return Object.entries(teamCounts)
+      .map(([name, count]) => ({ name, Transactions: count }))
+      .sort((a, b) => b.Transactions - a.Transactions);
+  }, [filteredTransactions, profileMap, teamMap]);
+
+  // -----------------------------------------------------------------------
+  // Top Agents by Revenue — top 5
+  // -----------------------------------------------------------------------
+  const topAgentRevenueData = useMemo(() => {
+    const agentRevenue: Record<string, number> = {};
+
+    for (const t of filteredTransactions) {
+      const agentId = t.agent_id;
+      if (!agentId) continue;
+      agentRevenue[agentId] = (agentRevenue[agentId] || 0) + (Number(t.deal_value) || 0);
+    }
+
+    return Object.entries(agentRevenue)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([agentId, revenue]) => {
+        const profile = profileMap[agentId];
+        const fullName = profile?.full_name || 'Unknown';
+        const firstName = fullName.split(' ')[0];
+        return { name: firstName, Revenue: revenue };
+      });
+  }, [filteredTransactions, profileMap]);
 
   const handleReset = () => {
     setDateRange(null);
@@ -244,8 +370,7 @@ const KPIInsightBoard: React.FC = () => {
             <DollarOutlined style={{ fontSize: 28, color: COLORS.teal, marginBottom: 8 }} />
             <Statistic
               title="Total Revenue"
-              value="12.5M"
-              prefix="AED"
+              value={formatAED(totalRevenue)}
               valueStyle={{ fontSize: 26, fontWeight: 700, color: COLORS.teal }}
             />
           </Card>
@@ -255,7 +380,7 @@ const KPIInsightBoard: React.FC = () => {
             <FileTextOutlined style={{ fontSize: 28, color: COLORS.blue, marginBottom: 8 }} />
             <Statistic
               title="Total Deals"
-              value={42}
+              value={totalDeals}
               valueStyle={{ fontSize: 26, fontWeight: 700, color: COLORS.blue }}
             />
           </Card>
@@ -265,8 +390,7 @@ const KPIInsightBoard: React.FC = () => {
             <BarChartOutlined style={{ fontSize: 28, color: COLORS.purple, marginBottom: 8 }} />
             <Statistic
               title="Avg Deal Size"
-              value="297K"
-              prefix="AED"
+              value={formatAED(avgDealSize)}
               valueStyle={{ fontSize: 26, fontWeight: 700, color: COLORS.purple }}
             />
           </Card>
@@ -276,7 +400,7 @@ const KPIInsightBoard: React.FC = () => {
             <TeamOutlined style={{ fontSize: 28, color: COLORS.yellow, marginBottom: 8 }} />
             <Statistic
               title="Active Leads"
-              value={513}
+              value={activeLeads}
               valueStyle={{ fontSize: 26, fontWeight: 700, color: COLORS.yellow }}
             />
           </Card>
@@ -345,7 +469,7 @@ const KPIInsightBoard: React.FC = () => {
                       <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value: any) => `${value}%`} />
+                  <Tooltip formatter={(value: any) => `${value} deals`} />
                   <Legend />
                 </PieChart>
               </ResponsiveContainer>
